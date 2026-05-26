@@ -3,6 +3,7 @@ import pandas as pd
 import joblib 
 from datetime import datetime
 from reportlab.pdfgen import canvas
+from database import vacas, predicciones, ganaderos
 
 from seguridad import (
     cifrar_dato,
@@ -44,53 +45,394 @@ st.markdown("---")
 modelo = joblib.load("modelo_predictivo_rf.pkl")
 columnas_modelo = joblib.load("columnas_predictivo.pkl")
 
+# LOGIN GANADERO
+st.sidebar.header(
+    "🔐 Acceso ganadero"
+)
+
+modo = st.sidebar.radio(
+
+    "Selecciona opción",
+
+    [
+        "Iniciar sesión",
+        "Registrarse"
+    ]
+)
+
+ganadero_actual = None
+
+if "ganadero_actual" not in st.session_state:
+
+    st.session_state.ganadero_actual = None
+
+# REGISTRO
+if modo == "Registrarse":
+
+    st.sidebar.subheader(
+        "📝 Registro"
+    )
+
+    nombre_ganadero = st.sidebar.text_input(
+        "Nombre"
+    )
+
+    rancho = st.sidebar.text_input(
+        "Rancho"
+    )
+
+    estado = st.sidebar.text_input(
+        "Estado"
+    )
+
+    telefono = st.sidebar.text_input(
+        "Teléfono"
+    )
+
+    password = st.sidebar.text_input(
+        "Contraseña",
+        type="password",
+    )
+
+    registrar = st.sidebar.button(
+        "Registrar perfil"
+    )
+
+    if registrar:
+
+        if (
+            len(password) < 8
+        ):
+
+            st.sidebar.error(
+                "La contraseña debe "
+                "tener al menos 8 caracteres"
+            )
+
+        else:
+
+            existente = False
+
+            for g in ganaderos.find():
+
+                tel_descifrado = descifrar_dato(
+                    g["telefono"].encode()
+                )
+
+                if tel_descifrado == telefono:
+
+                    existente = True
+                    break
+
+            if existente:
+
+                st.sidebar.warning(
+                    "El teléfono ya existe"
+                )
+
+            else:
+
+                ganaderos.insert_one({
+
+                    "nombre": cifrar_dato(
+                        nombre_ganadero
+                    ).decode(),
+
+                    "rancho": cifrar_dato(
+                        rancho
+                    ).decode(),
+
+                    "estado": cifrar_dato(
+                        estado
+                    ).decode(),
+
+                    "telefono": cifrar_dato(
+                        telefono
+                    ).decode(),
+
+                    "password": cifrar_dato(
+                        password
+                    ).decode()
+                })
+
+                st.sidebar.success(
+                    "Perfil registrado"
+                )
+
+# LOGIN
+else:
+
+    st.sidebar.subheader(
+        "🔑 Iniciar sesión"
+    )
+
+    telefono_login = st.sidebar.text_input(
+        "Teléfono"
+    )
+
+    password_login = st.sidebar.text_input(
+        "Contraseña",
+        type="password"
+    )
+
+    ingresar = st.sidebar.button(
+        "Ingresar"
+    )
+
+    if ingresar:
+
+        acceso = False
+
+        for g in ganaderos.find():
+
+            telefono_descifrado = descifrar_dato(
+                g["telefono"].encode()
+            )
+
+            password_descifrada = descifrar_dato(
+                g["password"].encode()
+            )
+
+            if (
+                telefono_descifrado == telefono_login
+                and
+                password_descifrada == password_login
+            ):
+
+                acceso = True
+
+                st.session_state.ganadero_actual = {
+
+                    "nombre": descifrar_dato(
+                        g["nombre"].encode()
+                    ),
+
+                    "rancho": descifrar_dato(
+                        g["rancho"].encode()
+                    ),
+
+                    "estado": descifrar_dato(
+                        g["estado"].encode()
+                    )
+                }
+
+                break
+
+        if acceso:
+
+            st.sidebar.success(
+                "Acceso autorizado"
+            )
+
+            st.sidebar.write(
+                f"👤 {st.session_state.ganadero_actual['nombre']}"
+            )
+
+            st.sidebar.write(
+                f"🐄 Rancho: "
+                f"{st.session_state.ganadero_actual['rancho']}"
+            )
+
+            st.sidebar.write(
+                f"📍 Estado: "
+                f"{st.session_state.ganadero_actual['estado']}"
+            )
+
+        else:
+
+            st.sidebar.error(
+                "Credenciales incorrectas"
+            )
+
+# REGISTRO DE VACAS
+st.header("🐮 Registro de vacas")
+
+with st.expander(
+    "Registrar nueva vaca"
+):
+
+    nueva_id = st.text_input(
+        "ID de la vaca",
+        placeholder="Ejemplo: VACA-001"
+    )
+
+    nueva_edad = st.number_input(
+        "Edad",
+        min_value=1,
+        max_value=20,
+        value=3
+    )
+
+    nueva_raza = st.selectbox(
+        "Raza",
+        [
+            "Holstein",
+            "Jersey",
+            "Cebú",
+            "Cruza"
+        ]
+    )
+
+    nuevos_partos = st.number_input(
+        "Número de partos",
+        min_value=0,
+        max_value=15,
+        value=1
+    )
+
+    nueva_produccion = st.number_input(
+        "Producción promedio",
+        min_value=0.0,
+        max_value=50.0,
+        value=20.0
+    )
+
+    guardar_vaca = st.button(
+        "💾 Guardar vaca"
+    )
+
+    if guardar_vaca:
+
+        vaca_existente = vacas.find_one({
+
+            "id_vaca": nueva_id
+        })
+
+        if vaca_existente:
+
+            st.warning(
+                "⚠ Ya existe una vaca con ese ID"
+            )
+
+        else:
+
+
+            vacas.insert_one({
+
+                "id_vaca": cifrar_dato(
+                    nueva_id
+                ).decode(),
+
+                "edad": cifrar_dato(
+                    str(nueva_edad)
+                ).decode(),
+
+                "raza": cifrar_dato(
+                    nueva_raza
+                ).decode(),
+
+                "partos": cifrar_dato(
+                    str(nuevos_partos)
+                ).decode(),
+
+                "produccion_base": cifrar_dato(
+                    str(nueva_produccion)
+                ).decode()
+            })
+
+            st.success(
+                "✅ Vaca registrada correctamente"
+            )
+
+st.markdown("---")
+
 # Información del animal
 with st.container():
-    st.header("📋 Información del animal 🐮")
 
+    st.header(
+        "📋 Información del animal"
+    )
+
+# Buscar vaca
 id_vaca = st.text_input(
     "ID de la vaca",
-    placeholder="Ejemplo: VACA-001"
+    placeholder="VACA-001"
 )
 
-edad = st.number_input(
-    "Edad de la vaca",
-    min_value=0,
-    max_value=20,
-    value=2
-)
+# Buscar en MongoDB
+vaca_db = None
 
-raza = st.selectbox(
-    "Raza",
-    ["Holstein", "Jersey", "Cebu", "Otra"]
-)
+for vaca in vacas.find():
 
-partos = st.number_input(
-    "Número de partos",
-    min_value=0,
-    max_value=15,
-    value=1
-)
+    id_descifrado = descifrar_dato(
+        vaca["id_vaca"].encode()
+    )
+
+    if id_descifrado == id_vaca:
+
+        vaca_db = vaca
+
+        break
+
+# Si existe
+if vaca_db:
+
+    st.success(
+        "✅ Vaca encontrada"
+    )
+    
+    edad = int(
+
+        descifrar_dato(
+            vaca_db["edad"].encode()
+        )
+    )
+
+    raza = descifrar_dato(
+
+        vaca_db["raza"].encode()
+    )
+
+    partos = int(
+
+        descifrar_dato(
+            vaca_db["partos"].encode()
+        )
+    )
+
+    produccion_base = float(
+
+        descifrar_dato(
+            vaca_db[
+                "produccion_base"
+            ].encode()
+        )
+    )
+
+    st.write(f"Edad: {edad}")
+
+    st.write(f"Raza: {raza}")
+
+    st.write(f"Partos: {partos}")
+
+    st.write(
+        f"Producción base: "
+        f"{produccion_base} L"
+    )
+
+# Si NO existe
+else:
+
+    st.warning(
+        "⚠ Vaca no registrada"
+    )
+
+    edad = 0
+    raza = "Holstein"
+    partos = 0
+    produccion_base = 20
 
 st.markdown("---")
 
 # Producción y ordeña
-
 with st.container():
     st.header("🥛 Producción y Ordeña")
 
 litros_dia = st.slider(
-    "Producción de leche (L/día)",
+    "Producción de leche del día (L/día)",
     0.0,
-    60.0,
-    22.0
-)
-
-produccion_promedio = st.slider(
-    "Producción promedio habitual (L/día)",
-    0.0,
-    60.0,
-    30.0
+    45.0,
+    5.0
 )
 
 tipo_ordena = st.selectbox(
@@ -153,7 +495,7 @@ temperatura_corporal = st.slider(
     "Temperatura corporal (°C)",
     35.0,
     45.0,
-    39.5
+    38.5
 )
 
 st.markdown("---")
@@ -179,10 +521,7 @@ analizar = st.button(
 
 st.markdown("---")
 
-# =========================
 # GENERAR PDF
-# =========================
-
 def generar_pdf(
     id_vaca,
     prediccion,
@@ -252,12 +591,12 @@ if analizar:
     # Variables derivadas
 
     desviacion_promedio = (
-        litros_dia - produccion_promedio
+        litros_dia - produccion_base
     )
 
     cambio_porcentual = (
-        ((litros_dia - produccion_promedio)
-        / (produccion_promedio + 1)) * 100
+        ((litros_dia - produccion_base)
+        / (produccion_base + 1)) * 100
     )
 
     # Aproximaciones simples para MVP
@@ -340,7 +679,6 @@ if analizar:
     )
 
     # CIFRAR RESULTADO
-
     fecha_actual = datetime.now().strftime(
     "%Y-%m-%d %H:%M"
     )
@@ -356,8 +694,25 @@ if analizar:
         texto_resultado
     )
 
-    # GUARDAR HISTORIAL
+    # GUARDAR EN MONGODB
+    predicciones.insert_one({
 
+        "id_vaca": cifrar_dato(
+            id_vaca
+        ).decode(),
+
+        "fecha": fecha_actual,
+
+        "prediccion": cifrar_dato(
+            prediccion
+        ).decode(),
+
+        "probabilidad": cifrar_dato(
+            f"{probabilidad_max:.2f}"
+        ).decode()
+    })
+
+    # GUARDAR HISTORIAL
     with open(
         "historial.txt",
         "ab"
@@ -367,10 +722,7 @@ if analizar:
             resultado_cifrado + b"\n"
         )
 
-    # =========================
     # RESULTADO PRINCIPAL
-    # =========================
-
     st.header("📌 Resultado del análisis")
 
     col1, col2 = st.columns(2)
@@ -389,10 +741,7 @@ if analizar:
             value=prediccion.capitalize()
         )
 
-    # =========================
     # GRÁFICA PROBABILIDADES
-    # =========================
-
     st.markdown("---")
 
     st.subheader("📊 Distribución de probabilidades")
@@ -416,10 +765,7 @@ if analizar:
         grafica_df.set_index("Estado")
     )
 
-    # =========================
     # INTERPRETACIÓN CLÍNICA
-    # =========================
-
     st.markdown("---")
 
     st.subheader("🩺 Interpretación clínica")
@@ -498,41 +844,23 @@ if analizar:
             "🚨 Atención veterinaria inmediata recomendada."
         )
 
-    # =========================
-    # EXPORTAR PDF
-    # =========================
+    # GUARDAR EN MONGODB
+    predicciones.insert_one({
 
-    st.markdown("---")
+        "id_vaca": id_vaca,
 
-    nombre_pdf = generar_pdf(
-        id_vaca,
-        prediccion,
-        probabilidad_max,
-        riesgo
-    )
+        "fecha": datetime.now(),
 
-    with open(
-        nombre_pdf,
-        "rb"
-    ) as pdf_file:
+        "prediccion": prediccion,
 
-        st.download_button(
+        "probabilidad": float(
+            probabilidad_max
+        ),
 
-            label="📄 Descargar reporte PDF",
+        "riesgo": riesgo
+    })
 
-            data=pdf_file,
-
-            file_name=nombre_pdf,
-
-            mime="application/pdf",
-
-            use_container_width=True
-        )
-
-    # =========================
     # RESUMEN VISUAL
-    # =========================
-
     st.markdown("---")
 
     st.subheader("📈 Resumen clínico")
@@ -589,49 +917,213 @@ if analizar:
 
     except:
         pass
-    
 
-    # HISTORIAL CLÍNICO
-    with st.container():
-        st.header("📁 Historial clínico")
-        st.caption(
-        "Historial protegido mediante cifrado AES"
-        )
+    # TENDENCIA CLÍNICA
+    st.markdown("---")
+
+    st.subheader(
+        "📈 Tendencia clínica temporal"
+    )
 
     try:
 
-        with open(
-            "historial.txt",
-            "rb"
-        ) as archivo:
+        registros = []
 
-            lineas = archivo.readlines()
+        for pred in predicciones.find():
 
-        if lineas:
+            id_descifrado = descifrar_dato(
+                pred["id_vaca"].encode()
+            )
 
-            for linea in reversed(lineas[-10:]):
+            if id_descifrado == id_vaca:
 
-                linea = linea.strip()
+                prediccion_descifrada = descifrar_dato(
+                    pred["prediccion"].encode()
+                )
 
-                if linea:
+                registros.append({
 
-                    texto = descifrar_dato(
-                        linea
-                    )
+                    "Fecha": pred["fecha"],
 
-                    st.info(texto)
+                    "Estado": prediccion_descifrada
+                })
+
+        if registros:
+
+            tendencia_df = pd.DataFrame(
+                registros
+            )
+
+            st.dataframe(
+                tendencia_df.tail(10),
+                use_container_width=True
+            )
+
+        else:
+
+            st.info(
+                "No hay historial clínico "
+                "para esta vaca."
+            )
+
+    except:
+
+        st.warning(
+            "No fue posible cargar "
+            "la tendencia clínica."
+        )
+
+    # ALERTAS INTELIGENTES
+    st.markdown("---")
+
+    st.subheader(
+        "🚨 Alertas inteligentes"
+    )
+
+    try:
+
+        estados = []
+
+        for pred in predicciones.find():
+
+            id_descifrado = descifrar_dato(
+                pred["id_vaca"].encode()
+            )
+
+            if id_descifrado == id_vaca:
+
+                estado = descifrar_dato(
+                    pred["prediccion"].encode()
+                )
+
+                estados.append(estado)
+
+        # Últimos análisis
+        ultimos = estados[-3:]
+
+        # ALERTA CLÍNICA
+        if ultimos.count("clinica") >= 2:
+
+            st.error(
+
+                "🚨 ALERTA CRÍTICA:\n\n"
+                "La vaca presenta múltiples "
+                "predicciones compatibles "
+                "con mastitis clínica."
+            )
+
+        # ALERTA SUBCLÍNICA
+
+        elif ultimos.count("subclinica") >= 2:
+
+            st.warning(
+
+                "⚠ ALERTA PREVENTIVA:\n\n"
+                "La vaca presenta tendencia "
+                "recurrente compatible "
+                "con mastitis subclínica."
+            )
+
+        # ESTABLE
+        else:
+
+            st.success(
+
+                "✅ Sin alertas críticas.\n\n"
+                "El comportamiento clínico "
+                "registrado es estable."
+            )
+
+    except:
+
+        st.info(
+            "No hay suficientes datos "
+            "para generar alertas."
+        )
+
+    # HISTORIAL CLÍNICO
+    st.markdown("---")
+
+    st.header("📁 Historial clínico")
+
+    if id_vaca:
+
+        historial = predicciones.find({
+
+            "id_vaca": id_vaca
+
+        }).sort(
+
+            "fecha",
+            -1
+        )
+
+        historial_lista = list(historial)
+
+        if historial_lista:
+
+            for registro in historial_lista:
+
+                fecha = registro[
+                    "fecha"
+                ].strftime(
+                    "%d/%m/%Y %H:%M"
+                )
+
+                st.info(
+
+                    f"""
+                    🐄 {registro['id_vaca']}
+
+                    📅 {fecha}
+
+                    🩺 {registro['prediccion'].capitalize()}
+
+                    📈 {registro['probabilidad']:.2f}%
+
+                    🚨 Riesgo:
+                    {registro['riesgo']}
+                    """
+                )
 
         else:
 
             st.write(
-                "No hay historial disponible."
+                "No existe historial "
+                "para esta vaca."
             )
 
-    except FileNotFoundError:
+    # EXPORTAR PDF
+    st.markdown("---")
 
-        st.write(
-            "Historial no encontrado."
+    nombre_pdf = generar_pdf(
+        id_vaca,
+        prediccion,
+        probabilidad_max,
+        riesgo
+    )
+
+    with open(
+        nombre_pdf,
+        "rb"
+    ) as pdf_file:
+
+        st.download_button(
+
+            label="📄 Descargar reporte PDF",
+
+            data=pdf_file,
+
+            file_name=nombre_pdf,
+
+            mime="application/pdf",
+
+            use_container_width=True
         )
+
+
+
+    
 
 
 
